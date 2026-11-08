@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="description" content="本地加密的个人生活时间线，无账号、无后端">
+<title>生活记录</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+*{box-sizing:border-box}
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2024;--mut:#6b7280;--line:#e5e7eb;--acc:#2f6f5f;--dgr:#b42318}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:0 12px 40px}
+header{position:sticky;top:0;z-index:9;background:var(--bg);padding:10px 0 8px;border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:17px}
+.pill{font-size:12px;padding:2px 8px;border-radius:99px;background:#eef1f3;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+.sec{display:flex;justify-content:space-between;align-items:center;font-weight:650;margin-bottom:10px;gap:8px}
+.tiny{font-size:12px;color:var(--mut);font-weight:400}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;font-size:14px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.danger{color:var(--dgr);border-color:#f3c6c1}
+.types{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.types button{padding:6px 12px}
+.types button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+textarea,input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff}
+textarea{resize:vertical;min-height:62px}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.row label{flex:1;min-width:110px;font-size:12px;color:var(--mut)}
+.row label input,.row label select{margin-top:3px}
+.end{justify-content:flex-end}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.item{border-top:1px solid var(--line);padding:10px 0}
+.meta{font-size:12px;color:var(--mut);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.badge{font-size:11px;padding:1px 6px;border-radius:5px;background:#eef1f3}
+.badge.L3,.badge.L4{background:#fdecea;color:var(--dgr)}
+.txt{margin:4px 0;white-space:pre-wrap;word-break:break-word}
+.day{font-size:13px;font-weight:700;color:var(--mut);margin:14px 0 4px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.filters>*{width:auto;flex:1;min-width:100px}
+.note{background:#fff8e6;border:1px solid #f2dfae;border-radius:8px;padding:9px 11px;font-size:13px;margin:10px 0}
+.warn{color:var(--dgr);font-size:13px}
+.hidden{display:none!important}
+.lock{max-width:420px;margin:10vh auto;padding:20px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1c2024;color:#fff;padding:10px 16px;border-radius:9px;z-index:99;font-size:14px;max-width:90vw}
+.fab{position:fixed;right:16px;bottom:18px;border-radius:99px;padding:12px 16px;box-shadow:0 4px 16px #0002;background:var(--acc);color:#fff;border-color:var(--acc)}
+@media(max-width:600px){.wrap{padding:0 10px 84px}.row label{min-width:calc(50% - 4px)}}
+</style>
+</head>
+<body>
+
+<div id="lock" class="card lock">
+  <h1 style="margin:0 0 4px">生活记录</h1>
+  <p class="tiny" id="lockHint">首次使用：设置一个口令</p>
+  <div class="note" id="ackNote">数据只存在这台设备，加密保存。<b>忘记口令无法恢复，本工具没有后门。</b></div>
+  <form id="lockForm">
+    <label class="tiny">口令（至少 8 位）<input id="pass" type="password" minlength="8" required autocomplete="new-password"></label>
+    <div id="pass2Row" style="margin-top:8px"><label class="tiny">确认口令<input id="pass2" type="password" minlength="8" autocomplete="new-password"></label></div>
+    <button class="primary" id="lockBtn" style="margin-top:12px;width:100%">创建本地数据库</button>
+  </form>
+  <p class="warn" id="lockWarn"></p>
+  <p class="tiny">无账号 · 无网络请求 · 公开仓库里没有任何记录数据</p>
+</div>
+
+<div id="app" class="wrap hidden">
+  <header><div class="bar">
+    <div class="brand">生活记录 <span class="pill">本地加密</span></div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span class="pill" id="syncBadge">仅本地，未同步</span>
+      <button id="installBtn" class="hidden">安装到主屏幕</button>
+      <button id="lockNow">锁定</button>
+    </div>
+  </div></header>
+
+  <div class="note hidden" id="uaWarn">检测到厂商自带浏览器。请用 <b>Chrome</b> 打开，才能安装到主屏幕并完整离线使用。</div>
+  <div class="note hidden" id="ctxWarn">当前不是安全上下文，加密不可用。请用 HTTPS 网址（GitHub Pages）打开。</div>
+
+  <section class="card">
+    <div class="sec">快速记录 <span class="tiny">Enter 保存 · 目标 ≤10 秒</span></div>
+    <div class="types" id="types">
+      <button type="button" data-t="todo" class="on">待办</button>
+      <button type="button" data-t="mood">情绪</button>
+      <button type="button" data-t="health">健康简记</button>
+    </div>
+    <textarea id="input" placeholder="一句话记下来…（Enter 保存，Shift+Enter 换行）"></textarea>
+    <div class="row" id="extra"></div>
+    <div class="row">
+      <label>时间<input type="datetime-local" id="occurred"></label>
+      <label>敏感级别<select id="sens"><option>L1</option><option>L2</option><option>L3</option><option>L4</option></select></label>
+      <label>标签<input id="tags" placeholder="逗号分隔，可空"></label>
+    </div>
+    <div class="row end"><span class="tiny" id="saveHint"></span><button class="primary" id="saveBtn">保存 ↵</button></div>
+  </section>
+
+  <section class="card">
+    <div class="sec">检索 <span class="tiny">本地，离线可用</span></div>
+    <input id="kw" placeholder="输入关键词过滤时间线">
+    <div class="row"><button id="aiBtn" disabled style="flex:1">AI 问答（W3）</button><span class="tiny">AI 仅电脑端可用，手机端置灰</span></div>
+  </section>
+
+  <section class="card">
+    <div class="sec">时间线 <span class="tiny" id="count"></span></div>
+    <div class="filters">
+      <select id="fType"><option value="">全部类型</option><option value="todo">待办</option><option value="mood">情绪</option><option value="health">健康简记</option></select>
+      <select id="fSens"><option value="">全部级别</option><option>L1</option><option>L2</option><option>L3</option><option>L4</option></select>
+    </div>
+    <div id="timeline"></div>
+  </section>
+
+  <section class="card">
+    <div class="sec">数据与隐私 <span class="tiny">导出文件为明文，请妥善保管</span></div>
+    <div class="grid">
+      <button id="expJson">导出 JSON</button>
+      <button id="expMd">导出 Markdown</button>
+      <button id="impBtn">导入 JSON</button>
+      <button id="bakBtn">建立备份点</button>
+      <button id="auditBtn">查看审计日志</button>
+      <button id="wipeBtn" class="danger">彻底删除全部数据</button>
+    </div>
+    <input type="file" id="impFile" accept="application/json,.json" hidden>
+    <div id="bakList" class="tiny" style="margin-top:10px"></div>
+  </section>
+  <p class="tiny">同步状态：仅本地，未同步。两端数据各自独立，W2 起可导出合并。</p>
+</div>
+
+<button class="fab hidden" id="fab">＋ 记录</button>
+<div id="toast" class="hidden"></div>
+<div id="modal" class="hidden" style="position:fixed;inset:0;background:#0006;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="max-width:560px;width:100%;max-height:80vh;overflow:auto;margin:0">
+    <div id="modalBody"></div>
+    <div class="row end"><button id="modalClose">关闭</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const enc = new TextEncoder(), dec = new TextDecoder();
+const DB = 'lifelog-v1', VER = 1, SCHEMA = 1, STORES = ['meta','records','audit','backups'];
+const TYPES = { todo:{label:'待办',sens:'L2'}, mood:{label:'情绪',sens:'L3'}, health:{label:'健康简记',sens:'L3'} };
+/* v2 预留类型：enabled=false，本版不进入任何 UI 与渲染路径 */
+const RESERVED = { habit:'L1', idea:'L2', event:'L2', finance:'L4' };
+const FINANCE_ENABLED = false;
+
+let db, dek = null, DEV = '', rows = [], ridOf = new Map(), curType = 'todo', idle = null, installEvt = null;
+const b64 = ab => btoa(String.fromCharCode(...new Uint8Array(ab)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+const now = () => new Date().toISOString();
+const C32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function ulid(){ let t = Date.now(), s = ''; for(let i=0;i<10;i++){ s = C32[t%32]+s; t = Math.floor(t/32); } const r = rnd(16); for(let i=0;i<16;i++) s += C32[r[i]%32]; return s; }
+function dtLocal(d = new Date()){ const p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function hash(o){ const {content_hash, ...x} = o; const k = Object.keys(x).sort(); const b = await crypto.subtle.digest('SHA-256', enc.encode(JSON.stringify(x, k))); return [...new Uint8Array(b)].map(v => v.toString(16).padStart(2,'0')).join(''); }
+
+function openDB(){ return new Promise((ok,no) => { const r = indexedDB.open(DB, VER); r.onupgradeneeded = e => { const d = e.target.result; for(const s of STORES) if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:'k'}); }; r.onsuccess = e => ok(e.target.result); r.onerror = () => no(r.error); }); }
+function idb(store, mode, fn){ return new Promise((ok,no) => { const t = db.transaction(store, mode), req = fn(t.objectStore(store)); t.oncomplete = () => ok(req ? req.result : undefined); t.onerror = () => no(t.error); }); }
+const all = s => idb(s,'readonly', o => o.getAll());
+const get = (s,k) => idb(s,'readonly', o => o.get(k));
+const put = (s,v) => idb(s,'readwrite', o => o.put(v));
+const del = (s,k) => idb(s,'readwrite', o => o.delete(k));
+const clear = s => idb(s,'readwrite', o => o.clear());
+
+async function derive(pass, salt){ const b = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'}, b, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt','wrapKey','unwrapKey']); }
+async function seal(key, obj){ const iv = rnd(12); const d = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, enc.encode(JSON.stringify(obj))); return {iv:b64(iv), data:b64(d)}; }
+async function unseal(key, o){ const d = await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)}, key, unb64(o.data)); return JSON.parse(dec.decode(d)); }
+const vault = () => get('meta','vault');
+
+async function createVault(pass){
+  const salt = rnd(16), kek = await derive(pass, salt);
+  const k = await crypto.subtle.generateKey({name:'AES-GCM',length:256}, true, ['encrypt','decrypt']);
+  const wiv = rnd(12);
+  const wrapped = await crypto.subtle.wrapKey('raw', k, kek, {name:'AES-GCM',iv:wiv});
+  const verifier = await seal(k, {v:'lifelog-ok'});
+  const dev = await seal(k, {id:crypto.randomUUID()});
+  await put('meta', {k:'vault', salt:b64(salt), wiv:b64(wiv), wrapped:b64(wrapped), verifier, dev, schema:SCHEMA, created:now()});
+  dek = k;
+}
+async function unlockVault(pass){
+  const v = await vault(); if(!v) throw new Error('no-vault');
+  const kek = await derive(pass, unb64(v.salt));
+  const k = await crypto.subtle.unwrapKey('raw', unb64(v.wrapped), kek, {name:'AES-GCM',iv:unb64(v.wiv)}, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt']);
+  await unseal(k, v.verifier);
+  dek = k;
+}
+
+async function saveRec(r){ const c = await seal(dek, r); await put('records', {k: ridOf.get(r.id) || crypto.randomUUID(), iv:c.iv, data:c.data}); }
+async function loadRecs(){
+  const list = await all('records'); rows = []; ridOf.clear();
+  for(const x of list){ try { const r = await unseal(dek, x); rows.push(r); ridOf.set(r.id, x.k); } catch(e){} }
+  rows.sort((a,b) => String(b.occurred_at).localeCompare(String(a.occurred_at)));
+}
+async function audit(a, n = ''){ const c = await seal(dek, {at:now(), a, n}); await put('audit', {k:ulid(), iv:c.iv, data:c.data}); }
+async function backup(label){ const c = await seal(dek, {at:now(), label, records:rows}); await put('backups', {k:now()+'-'+ulid().slice(-6), iv:c.iv, data:c.data}); const b = await all('backups'); if(b.length > 10) for(const x of b.slice(0, b.length-10)) await del('backups', x.k); }
+async function restore(k){
+  const b = (await all('backups')).find(x => x.k === k); if(!b) return;
+  await backup('回滚前自动备份');
+  const s = await unseal(dek, b);
+  await clear('records');
+  for(const r of s.records){ ridOf.delete(r.id); await saveRec(r); }
+  await loadRecs(); await audit('restore', k.slice(0,19)); render(); toast('已恢复到该备份点');
+}
+
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.add('hidden'), 3200); }
+function showModal(html){ $('#modalBody').innerHTML = html; $('#modal').classList.remove('hidden'); }
+function closeModal(){ $('#modal').classList.add('hidden'); }
+function dl(name, text, mime){ const b = new Blob([text], {type:mime}), u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 2000); }
+function displayOf(r){
+  if(r.type === 'todo') return (r.title||'') + (r.note ? '\n'+r.note : '');
+  if(r.type === 'mood') return `${r.score ?? '-'} 分 · ${r.label||''}` + (r.note ? '\n'+r.note : '');
+  if(r.type === 'health') return `${r.metric||'记录'} ${r.value||''}${r.unit||''}` + (r.note ? '\n'+r.note : '');
+  return r.content || r.title || '';
+}
+function searchOf(r){ return Object.values(r).filter(v => typeof v === 'string' || typeof v === 'number').join(' '); }
+function mainTextOf(r){ return r.type === 'todo' ? (r.title||'') : r.type === 'mood' ? (r.label||'') : (r.note||''); }
+
+function extraHTML(){
+  if(curType === 'mood') return '<label>情绪分值<select id="score"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>';
+  if(curType === 'health') return '<label>项目<input id="metric" placeholder="如 睡眠"></label><label>数值<input id="value" placeholder="如 7"></label><label>单位<input id="unit" placeholder="如 小时"></label>';
+  return '<label>截止（可选）<input type="date" id="due"></label>';
+}
+function setType(t){
+  curType = t;
+  document.querySelectorAll('#types button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  $('#extra').innerHTML = extraHTML();
+  $('#sens').value = TYPES[t].sens;
+  $('#input').placeholder = t === 'health' ? '补充说明（可空）。数值只记录，不做任何判断。' : t === 'mood' ? '此刻的感受…（Enter 保存）' : '一句话记下来…（Enter 保存）';
+}
+function itemHTML(r){
+  return `<div class="item" data-id="${esc(r.id)}">
+    <div class="meta"><span>${esc(String(r.occurred_at).slice(11,16))}</span>
+      <span class="badge">${esc(TYPES[r.type]?.label || r.type)}</span>
+      <span class="badge ${esc(r.sensitivity)}">${esc(r.sensitivity)}</span>
+      <span>${esc(r.source)}</span>
+      ${r.type === 'todo' && r.status === 'done' ? '<span class="badge">已完成</span>' : ''}</div>
+    <div class="txt">${esc(displayOf(r))}</div>
+    ${(r.tags||[]).length ? `<div class="meta">${r.tags.map(t => `<span class="badge">${esc(t)}</span>`).join('')}</div>` : ''}
+    <div class="meta" style="margin-top:4px"><span class="tiny">${esc(r.id.slice(0,10))}… · rev ${esc(r.revision)}</span>
+      <button data-act="edit">编辑</button>
+      ${r.type === 'todo' ? `<button data-act="toggle">${r.status === 'done' ? '标为未完成' : '标记完成'}</button>` : ''}
+      <button data-act="del">删除</button></div></div>`;
+}
+async function render(){
+  const kw = $('#kw').value.trim().toLowerCase(), ft = $('#fType').value, fs = $('#fSens').value;
+  const list = rows.filter(r => !r.deleted_at && (!ft || r.type === ft) && (!fs || r.sensitivity === fs) && (!kw || searchOf(r).toLowerCase().includes(kw)));
+  $('#count').textContent = `${list.length} / ${rows.length} 条`;
+  const g = {}; for(const r of list){ const d = String(r.occurred_at).slice(0,10); (g[d] ??= []).push(r); }
+  let h = ''; for(const d of Object.keys(g).sort().reverse()){ h += `<div class="day">${esc(d)}</div>`; for(const r of g[d]) h += itemHTML(r); }
+  $('#timeline').innerHTML = h || '<p class="tiny">还没有记录。上面写一句，按 Enter 保存。</p>';
+  renderBackups();
+}
+async function renderBackups(){
+  const b = await all('backups');
+  $('#bakList').innerHTML = b.length
+    ? '备份点（最多 10 个，加密存于本机）：<br>' + b.slice().reverse().map(x => `${esc(x.k.slice(0,19))} <button data-bak="${esc(x.k)}">恢复</button>`).join('<br>')
+    : '暂无备份点。建议现在点一次「建立备份点」。';
+}
+
+async function addRec(){
+  const text = $('#input').value.trim();
+  if(!text && curType !== 'health'){ $('#saveHint').textContent = '先写一句再保存'; return; }
+  const at = $('#occurred').value ? new Date($('#occurred').value).toISOString() : now();
+  const r = {id:ulid(), type:curType, occurred_at:at, created_at:now(), updated_at:at, deleted_at:null,
+    source:'manual_text', device_id:DEV, sensitivity:$('#sens').value,
+    tags:$('#tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean), attachment_ids:[],
+    revision:1, schema_ver:SCHEMA, content_hash:''};
+  if(curType === 'todo'){ r.title = text; r.note = ''; r.status = 'open'; r.due_at = $('#due')?.value || null; r.done_at = null; }
+  else if(curType === 'mood'){ r.label = text; r.score = Number($('#score')?.value || 3); r.trigger = ''; r.note = ''; }
+  else { r.metric = ($('#metric')?.value||'').trim() || '记录'; r.value = ($('#value')?.value||'').trim(); r.unit = ($('#unit')?.value||'').trim(); r.note = text; }
+  r.content_hash = await hash(r);
+  await saveRec(r); await loadRecs(); await audit('create', curType);
+  $('#input').value = ''; $('#tags').value = ''; $('#occurred').value = dtLocal(); $('#saveHint').textContent = '已保存';
+  render(); toast('已记录 · 数据只在本机');
+}
+async function editRec(id){
+  const r = rows.find(x => x.id === id); if(!r) return;
+  showModal(`<div class="sec">编辑记录 <span class="tiny">${esc(r.id)}</span></div>
+    <textarea id="edTxt" rows="3">${esc(mainTextOf(r))}</textarea>
+    <div class="row"><label>敏感级别<select id="edSens">${['L1','L2','L3','L4'].map(v => `<option ${v === r.sensitivity ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+    <div class="row end"><button class="primary" id="edSave">保存修改</button></div>`);
+  $('#edSave').onclick = async () => {
+    const t = $('#edTxt').value.trim();
+    if(r.type === 'todo') r.title = t; else if(r.type === 'mood') r.label = t; else r.note = t;
+    r.sensitivity = $('#edSens').value; r.updated_at = now(); r.revision = (r.revision||1)+1; r.content_hash = await hash(r);
+    await saveRec(r); await loadRecs(); await audit('update', id.slice(0,10)); closeModal(); render(); toast('已保存修改');
+  };
+}
+async function delRec(id){ if(!confirm('彻底删除这条记录？不可恢复。')) return; await del('records', ridOf.get(id)); await loadRecs(); await audit('delete-one', id.slice(0,10)); render(); toast('已删除'); }
+async function toggleTodo(id){ const r = rows.find(x => x.id === id); if(!r) return; r.status = r.status === 'done' ? 'open' : 'done'; r.done_at = r.status === 'done' ? now() : null; r.updated_at = now(); r.revision++; r.content_hash = await hash(r); await saveRec(r); await loadRecs(); await audit('todo-toggle', id.slice(0,10)); render(); }
+
+function exportJSON(){
+  const p = {format:'life-log/v1', schema_ver:SCHEMA, exported_at:now(), device:DEV, count:rows.length, records:rows};
+  dl(`lifelog-${now().slice(0,10)}.json`, JSON.stringify(p, null, 2), 'application/json');
+  audit('export-json', String(rows.length)); toast('已导出明文 JSON —— 请妥善保管');
+}
+function exportMD(){
+  let md = `# 生活记录\n\n导出时间：${now()}\n共 ${rows.length} 条\n`;
+  const g = {}; for(const r of rows){ const d = String(r.occurred_at).slice(0,10); (g[d] ??= []).push(r); }
+  for(const d of Object.keys(g).sort().reverse()){ md += `\n## ${d}\n`; for(const r of g[d]) md += `- ${String(r.occurred_at).slice(11,16)} [${TYPES[r.type]?.label||r.type}] ${displayOf(r).replace(/\n/g,' / ')} (${r.sensitivity}, ${r.id})\n`; }
+  dl(`lifelog-${now().slice(0,10)}.md`, md, 'text/markdown;charset=utf-8');
+  audit('export-md', String(rows.length)); toast('已导出 Markdown —— 明文，请妥善保管');
+}
+async function importJSON(file){
+  try {
+    const o = JSON.parse(await file.text());
+    if(o.format !== 'life-log/v1' || !Array.isArray(o.records)) throw new Error('不是本工具的导出文件');
+    let ok = 0, skip = 0;
+    for(const r of o.records){
+      if(!r.id || !TYPES[r.type] || ridOf.has(r.id)){ skip++; continue; }
+      const h = await hash(r);
+      if(r.content_hash && r.content_hash !== h){ skip++; continue; }
+      await saveRec(r); ok++;
+    }
+    await loadRecs(); await audit('import', `${ok}/${skip}`); render(); toast(`导入 ${ok} 条，跳过 ${skip} 条`);
+  } catch(e){ toast('导入失败：' + e.message); }
+}
+async function showAudit(){
+  const a = await all('audit'), items = [];
+  for(const x of a){ try { items.push(await unseal(dek, x)); } catch(e){} }
+  showModal(`<div class="sec">审计日志 <span class="tiny">仅元事件，不含记录正文</span></div>
+    ${items.slice(-50).reverse().map(i => `<div class="meta" style="padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(i.at.slice(0,19))}</span><span class="badge">${esc(i.a)}</span><span>${esc(i.n)}</span></div>`).join('') || '<p class="tiny">暂无日志</p>'}`);
+}
+async function wipe(){
+  if(!confirm('将删除本机全部记录、备份点、审计日志与密钥，且不可恢复。继续？')) return;
+  const p = prompt('请输入口令确认：'); if(!p) return;
+  try { await unlockVault(p); } catch(e){ alert('口令错误，已取消'); return; }
+  const n = rows.length; db.close();
+  await new Promise(ok => { const r = indexedDB.deleteDatabase(DB); r.onsuccess = ok; r.onerror = ok; r.onblocked = ok; });
+  alert(`已彻底删除 ${n} 条记录及全部本地数据。`); location.reload();
+}
+function arm(){ clearTimeout(idle); idle = setTimeout(lockNow, 5*60*1000); }
+function lockNow(){ dek = null; rows = []; ridOf.clear(); closeModal(); $('#app').classList.add('hidden'); $('#fab').classList.add('hidden'); $('#lock').classList.remove('hidden'); $('#pass').value = ''; $('#lockHint').textContent = '已锁定，输入口令解锁'; $('#lockWarn').textContent = ''; $('#lockBtn').disabled = false; }
+
+$('#types').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if(b) setType(b.dataset.t); });
+$('#input').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); addRec(); } });
+$('#saveBtn').onclick = addRec;
+$('#kw').oninput = render;
+$('#fType').onchange = render;
+$('#fSens').onchange = render;
+$('#timeline').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const id = b.closest('[data-id]').dataset.id;
+  if(b.dataset.act === 'edit') editRec(id);
+  else if(b.dataset.act === 'del') delRec(id);
+  else if(b.dataset.act === 'toggle') toggleTodo(id);
+});
+$('#bakList').addEventListener('click', async e => { const b = e.target.closest('[data-bak]'); if(b && confirm('恢复到该备份点？当前状态会先自动存一个新备份。')) await restore(b.dataset.bak); });
+$('#expJson').onclick = exportJSON;
+$('#expMd').onclick = exportMD;
+$('#impBtn').onclick = () => $('#impFile').click();
+$('#impFile').onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; };
+$('#bakBtn').onclick = async () => { await backup('手动'); await audit('backup'); render(); toast('已建立加密备份点'); };
+$('#auditBtn').onclick = showAudit;
+$('#wipeBtn').onclick = wipe;
+$('#modalClose').onclick = closeModal;
+$('#lockNow').onclick = lockNow;
+$('#fab').onclick = () => { window.scrollTo({top:0, behavior:'smooth'}); $('#input').focus(); };
+$('#installBtn').onclick = async () => { if(installEvt){ installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('#installBtn').classList.add('hidden'); } };
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#installBtn').classList.remove('hidden'); });
+['click','keydown','touchstart'].forEach(ev => document.addEventListener(ev, arm, {passive:true}));
+
+$('#lockForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const p = $('#pass').value;
+  if(p.length < 8){ $('#lockWarn').textContent = '口令至少 8 位'; return; }
+  $('#lockWarn').textContent = '正在派生密钥…（约 1 秒）'; $('#lockBtn').disabled = true;
+  try {
+    const exists = !!(await vault());
+    if(exists) await unlockVault(p);
+    else { if(p !== $('#pass2').value) throw new Error('两次口令不一致'); await createVault(p); }
+    const v = await vault();
+    DEV = (await unseal(dek, v.dev)).id;
+    if(!exists){ await backup('首次创建'); await audit('vault-create'); }
+    await loadRecs(); await audit('unlock');
+    $('#lock').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#fab').classList.remove('hidden');
+    $('#occurred').value = dtLocal(); setType('todo'); render(); arm(); $('#input').focus();
+  } catch(err){ $('#lockWarn').textContent = '失败：' + (err.message || err) + (String(err.message||err).includes('OperationError') ? '（口令错误？）' : ''); $('#lockBtn').disabled = false; }
+});
+
+(async function init(){
+  if(!window.crypto?.subtle){ $('#ctxWarn').classList.remove('hidden'); $('#lockBtn').disabled = true; return; }
+  if(/MiuiBrowser|Miui|XiaoMi/i.test(navigator.userAgent)) $('#uaWarn').classList.remove('hidden');
+  try { db = await openDB(); } catch(e){ $('#lockWarn').textContent = '本地数据库不可用：' + e.message; $('#lockBtn').disabled = true; return; }
+  if(await vault()){
+    $('#lockHint').textContent = '输入口令解锁';
+    $('#pass2Row').classList.add('hidden');
+    $('#ackNote').classList.add('hidden');
+    $('#lockBtn').textContent = '解锁';
+  }
+  if('serviceWorker' in navigator && location.protocol !== 'file:'){
+    navigator.serviceWorker.register('./sw.js', {scope:'./'}).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
